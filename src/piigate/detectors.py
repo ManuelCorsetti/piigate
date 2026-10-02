@@ -25,27 +25,38 @@ class Detector:
     validator: Validator | None = None
     name_hint: NameHint | None = None
     group: int = 0
+    gates: tuple[tuple[re.Pattern[str], ...], ...] = ()
+    portable: bool = False  # patterns are RE2-compatible ruleset patterns (eligible for re2.Set)
+
+    def gate_for(self, i: int) -> tuple[re.Pattern[str], ...]:
+        """Chain of cheap necessary conditions for ``patterns[i]`` (empty: none). If any gate
+        fails to match a text, the pattern cannot match it."""
+        return self.gates[i] if i < len(self.gates) else ()
 
     def matches(self, text: str) -> Iterator[str]:
-        """Yield validated matched substrings of ``text``.
+        """Yield validated matched substrings of ``text`` from every pattern."""
+        for pat in self.patterns:
+            yield from self.matches_pattern(pat, text)
+
+    def matches_pattern(self, pat: re.Pattern[str], text: str) -> Iterator[str]:
+        """Yield validated matched substrings of ``text`` from one pattern.
 
         Ruleset patterns put their boundaries *outside* the capture group (no lookarounds, for
         RE2 portability), so after a match we resume at the end of the group, not the match. After
         a rejected candidate we resume one character into it, so a valid match overlapping a
         failed one is still found.
         """
-        for pat in self.patterns:
-            pos = 0
-            while pos <= len(text):
-                m = pat.search(text, pos)
-                if m is None:
-                    break
-                start, end = m.span(self.group)
-                if self.validator is None or self.validator(m.group(self.group)):
-                    yield m.group(self.group)
-                    pos = end if end > pos else pos + 1
-                else:
-                    pos = start + 1
+        pos = 0
+        while pos <= len(text):
+            m = pat.search(text, pos)
+            if m is None:
+                break
+            start, end = m.span(self.group)
+            if self.validator is None or self.validator(m.group(self.group)):
+                yield m.group(self.group)
+                pos = end if end > pos else pos + 1
+            else:
+                pos = start + 1
 
 
 def normalise_name(name: object) -> str:

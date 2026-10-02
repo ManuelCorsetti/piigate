@@ -7,7 +7,7 @@ with `default_detectors() + load_ruleset(...)`.
 ```json
 {"version": 1, "name": "uk_gdpr", "detectors": [{
   "tag": "EMAIL",
-  "patterns": ["(?i)(?:^|[^\\w.+-])([\\w.+-]+@[a-z0-9-]+(?:\\.[a-z0-9-]+)+)"],
+  "patterns": [{"regex": "(?i)(?:^|[^\\w.+-])([\\w.+-]+@[a-z0-9-]+(?:\\.[a-z0-9-]+)+)", "gate": "@"}],
   "validator": null,
   "name_hint": {"fragments": ["email"], "tokens": [], "qualified": null},
   "examples": {"match": ["..."], "no_match": ["..."]},
@@ -23,6 +23,10 @@ with `default_detectors() + load_ruleset(...)`.
 - **Exactly one capture group**, holding the matched text. Boundaries sit outside it as consuming
   groups, e.g. `(?:^|[^A-Za-z0-9])(...)(?:$|[^A-Za-z0-9])`.
 - Several patterns per detector are OR-ed; matches are summed.
+- **`gate`** (optional, string or list): cheap necessary conditions. If a gate does not match a
+  text, the pattern cannot match it, so the engine may skip it. Gates in a list run in order, each
+  only on rows that passed the previous one. A gate must never be stricter than its pattern; a test
+  fuzzes this (pattern match implies every gate matches). Gates are RE2 syntax with no capture groups.
 
 ## Matching algorithm
 Search from `pos`. On a match, take the capture group. If the validator accepts it, count it and set

@@ -13,6 +13,9 @@ result.failed_columns  # {"email": ColumnFinding(tags, match_count, match_rate, 
 scan_dataframe(df, cols, raise_on_fail=True)  # raises PIIFoundError(result)
 ```
 
+Speed: each distinct value is scanned once. `pip install piigate[fast]` (google-re2) scans all
+rules in a single pass; `engine="python"|"re2"|"auto"`, results identical. `benchmarks/bench_scan.py`.
+
 Options: `thresholds={"TAG": n}` (default 0), `sample=N` (opt-in), `name_heuristics=False`,
 `top_n`, `detectors=[...]`. Custom rules: `register_detector(tag, regex, validator=None, column_names=())`.
 

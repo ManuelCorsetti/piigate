@@ -4,7 +4,8 @@ Format (version 1), see ``docs/ruleset.md``::
 
     {"version": 1, "name": "...", "detectors": [{
         "tag": "EMAIL",
-        "patterns": ["(?i)(?:^|[^\\w.+-])([\\w.+-]+@...)"],   # RE2 syntax, one capture group
+        "patterns": [{"regex": "(?i)(?:^|[^\\w.+-])([\\w.+-]+@...)",   # RE2, one capture group
+                      "gate": "@"}],  # optional: string or list, each a cheap necessary condition
         "validator": "luhn" | null,                          # name from validators.VALIDATORS
         "name_hint": {"fragments": [...], "tokens": [...], "qualified": {...}},
         "examples": {"match": [...], "no_match": [...]},      # conformance vectors
@@ -55,6 +56,21 @@ def compile_pattern(pattern: str) -> re.Pattern[str]:
     return compiled
 
 
+def compile_gate(gate: str) -> re.Pattern[str]:
+    """Compile a gate: RE2-compatible, ASCII, no capture groups."""
+    check_re2(gate)
+    compiled = re.compile(gate, re.ASCII)
+    if compiled.groups:
+        raise ValueError(f"gate must not have capture groups: {gate!r}")
+    return compiled
+
+
+def _gate_chain(gate: str | list[str] | None) -> tuple[re.Pattern[str], ...]:
+    if not gate:
+        return ()
+    return tuple(compile_gate(g) for g in ([gate] if isinstance(gate, str) else gate))
+
+
 def name_hint_from_spec(spec: Mapping[str, Any]) -> NameHint:
     """Build a column-name hint from ``fragments`` / ``tokens`` / ``qualified`` keys.
 
@@ -84,7 +100,9 @@ def detectors_from_dict(doc: Mapping[str, Any]) -> tuple[Detector, ...]:
         vname = d.get("validator")
         if vname is not None and vname not in VALIDATORS:
             raise ValueError(f"{d['tag']}: unknown validator {vname!r}")
-        patterns = tuple(compile_pattern(p) for p in d.get("patterns", ()))
+        specs = [{"regex": p} if isinstance(p, str) else p for p in d.get("patterns", ())]
+        patterns = tuple(compile_pattern(p["regex"]) for p in specs)
+        gates = tuple(_gate_chain(p.get("gate")) for p in specs)
         spec = d.get("name_hint")
         out.append(
             Detector(
@@ -93,6 +111,8 @@ def detectors_from_dict(doc: Mapping[str, Any]) -> tuple[Detector, ...]:
                 validator=VALIDATORS[vname] if vname else None,
                 name_hint=name_hint_from_spec(spec) if spec else None,
                 group=1,
+                gates=gates,
+                portable=True,
             )
         )
     return tuple(out)

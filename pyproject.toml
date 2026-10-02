@@ -12,7 +12,8 @@ dependencies = ["pandas>=1.5"]
 
 [project.optional-dependencies]
 bigquery = ["google-cloud-bigquery"]
-dev = ["pytest", "ruff", "google-re2"]
+fast = ["google-re2"]
+dev = ["pytest", "ruff", "piigate[fast]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/piigate"]

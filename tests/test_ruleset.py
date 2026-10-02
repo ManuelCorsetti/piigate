@@ -13,6 +13,10 @@ SPECS = {d["tag"]: d for d in DOC["detectors"]}
 DETS = {d.tag: d for d in load_ruleset("uk_gdpr")}
 
 
+def _chain(gate):
+    return [gate] if isinstance(gate, str) else list(gate or ())
+
+
 def test_bundled_ruleset_matches_defaults():
     assert [d.tag for d in default_detectors()] == [d["tag"] for d in DOC["detectors"]]
 
@@ -39,14 +43,19 @@ def test_column_name_vectors(tag):
 @pytest.mark.parametrize("tag", SPECS)
 def test_patterns_are_re2_compatible(tag):
     for p in SPECS[tag]["patterns"]:
-        check_re2(p)
+        check_re2(p["regex"])
+        for g in _chain(p.get("gate")):
+            check_re2(g)
 
 
 @pytest.mark.parametrize("tag", SPECS)
 def test_re2_engine_agrees_with_python(tag):
     re2 = pytest.importorskip("re2")
-    for src, pat in zip(SPECS[tag]["patterns"], DETS[tag].patterns, strict=True):
-        r = re2.compile(src, re2.Options())
+    for spec, pat in zip(SPECS[tag]["patterns"], DETS[tag].patterns, strict=True):
+        src = spec["regex"]
+        r = re2.compile(src)
+        for g in _chain(spec.get("gate")):
+            re2.compile(g)
         corpus = SPECS[tag]["examples"]["match"] + SPECS[tag]["examples"]["no_match"]
         for text in corpus:
             py = pat.search(text)
@@ -115,3 +124,77 @@ def test_adjacent_matches_not_lost_to_boundaries():
 def test_valid_match_overlapping_rejected_candidate_is_found():
     text = "4111 1111 1111 1112 4111 1111 1111 1111"
     assert list(DETS["CARD_NUMBER"].matches(text)) == ["4111 1111 1111 1111"]
+
+
+def test_gates_are_necessary_conditions():
+    """A gate may only skip a row if no match is possible: pattern match => gate match."""
+    import random
+
+    rng = random.Random(0)
+    alphabet = "0123456789019abcdefABCGBWESTNIXZ@:.-+() \t"
+    corpus = [t for d in SPECS.values() for t in d["examples"]["match"] + d["examples"]["no_match"]]
+    corpus += ["".join(rng.choices(alphabet, k=rng.randint(1, 40))) for _ in range(40_000)]
+    for det in DETS.values():
+        for i, pat in enumerate(det.patterns):
+            for text in corpus:
+                if pat.search(text):
+                    for gate in det.gate_for(i):
+                        assert gate.search(text), (det.tag, i, gate.pattern, text)
+
+
+def test_gates_do_not_change_results():
+    corpus = ["x", "", "plain words", "07911 123456", "a@b.co", "ip:10.0.0.1", "::1 12:30:45"]
+    for tag in SPECS:
+        corpus += SPECS[tag]["examples"]["match"] + SPECS[tag]["examples"]["no_match"]
+    df = pd.DataFrame({"c": corpus * 3})
+    gated = scan_dataframe(df, ["c"])
+    ungated = scan_dataframe(
+        df,
+        ["c"],
+        detectors=[
+            type(d)(d.tag, d.patterns, d.validator, None, d.group) for d in default_detectors()
+        ],
+    )
+    assert gated == ungated
+
+
+def test_dedup_weights_counts_by_row():
+    df = pd.DataFrame({"c": ["a@b.co"] * 7 + ["clean"] * 3 + [None]})
+    f = scan_dataframe(df, ["c"]).failed_columns["c"]
+    assert f.match_count == 7 and f.match_rate == 0.7 and f.masked_shapes == (("L@L.LL", 7),)
+
+
+def _mixed_df():
+    corpus = ["x", "", "plain words", "07911 123456", "a@b.co", "ip:10.0.0.1", "::1 12:30:45"]
+    for tag in SPECS:
+        corpus += SPECS[tag]["examples"]["match"] + SPECS[tag]["examples"]["no_match"]
+    corpus += ["café 07911 123456 ñ", "x" * 500, None, 42, 4111111111111111]
+    return pd.DataFrame({"c": corpus * 2, "first_name": ["a"] * (len(corpus) * 2)})
+
+
+def test_engines_give_identical_results():
+    pytest.importorskip("re2")
+    df = _mixed_df()
+    cols = ["c", "first_name"]
+    assert scan_dataframe(df, cols, engine="re2") == scan_dataframe(df, cols, engine="python")
+
+
+def test_re2_engine_still_runs_non_portable_custom_detectors():
+    pytest.importorskip("re2")
+    import re
+
+    from piigate import Detector
+
+    custom = Detector("REF", (re.compile(r"(?<=REF-)\d{4}"),))  # lookbehind: Python-only
+    df = pd.DataFrame({"c": ["see REF-1234", "a@b.co", "clean"]})
+    res = scan_dataframe(df, ["c"], detectors=[*default_detectors(), custom], engine="re2")
+    assert set(res.failed_columns["c"].tags) == {"REF", "EMAIL"}
+
+
+def test_re2_engine_requires_package(monkeypatch):
+    import piigate.scanner as sc
+
+    monkeypatch.setattr(sc, "_have_re2", lambda: False)
+    with pytest.raises(ImportError, match="piigate\\[fast\\]"):
+        scan_dataframe(pd.DataFrame({"c": ["x"]}), ["c"], engine="re2")
+    assert scan_dataframe(pd.DataFrame({"c": ["a@b.co"]}), ["c"]).failed_columns  # auto: python
