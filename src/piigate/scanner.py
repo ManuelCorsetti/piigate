@@ -40,20 +40,20 @@ def _scan_column(
             rows[det.tag] = np.ones(n, dtype=bool)
             shapes[det.tag] = Counter(mask_shape(v) for v in arr)
             continue
-        if det.pattern is None or n == 0:
+        if not det.patterns or n == 0:
             continue
+        mask = np.zeros(n, dtype=bool)
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)  # capture groups in custom patterns
-            candidates = np.flatnonzero(values.str.contains(det.pattern, regex=True).to_numpy())
+            warnings.simplefilter("ignore", UserWarning)  # capture groups in patterns
+            for pat in det.patterns:
+                mask |= values.str.contains(pat, regex=True).to_numpy()
         tag_rows = rows.setdefault(det.tag, np.zeros(n, dtype=bool))
         tag_shapes = shapes.setdefault(det.tag, Counter())
-        for i in candidates:
-            for m in det.pattern.finditer(arr[i]):
-                text = m.group(0)
-                if det.validator is None or det.validator(text):
-                    counts[det.tag] = counts.get(det.tag, 0) + 1
-                    tag_rows[i] = True
-                    tag_shapes[mask_shape(text)] += 1
+        for i in np.flatnonzero(mask):
+            for text in det.matches(arr[i]):
+                counts[det.tag] = counts.get(det.tag, 0) + 1
+                tag_rows[i] = True
+                tag_shapes[mask_shape(text)] += 1
 
     failing = sorted(t for t, c in counts.items() if c > thresholds.get(t, 0))
     if not failing:

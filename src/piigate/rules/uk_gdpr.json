@@ -1,0 +1,398 @@
+{
+  "version": 1,
+  "name": "uk_gdpr",
+  "detectors": [
+    {
+      "tag": "NAME",
+      "patterns": [],
+      "validator": null,
+      "name_hint": {
+        "tokens": [
+          "surname",
+          "forename",
+          "firstname",
+          "lastname",
+          "fullname",
+          "middlename"
+        ],
+        "qualified": {
+          "word": "name",
+          "qualifiers": [
+            "first",
+            "last",
+            "middle",
+            "full",
+            "given",
+            "family",
+            "maiden",
+            "customer",
+            "client",
+            "patient",
+            "employee",
+            "contact",
+            "person",
+            "holder",
+            "legal",
+            "preferred"
+          ]
+        }
+      },
+      "examples": {
+        "match": [],
+        "no_match": []
+      },
+      "column_names": {
+        "hit": [
+          "name",
+          "first_name",
+          "firstName",
+          "Customer Name",
+          "surname",
+          "patient-name"
+        ],
+        "miss": [
+          "file_name",
+          "hostname",
+          "table_name",
+          "notes",
+          "username"
+        ]
+      }
+    },
+    {
+      "tag": "EMAIL",
+      "patterns": [
+        "(?i)(?:^|[^\\w.+-])([\\w.+-]+@[a-z0-9-]+(?:\\.[a-z0-9-]+)+)"
+      ],
+      "validator": null,
+      "name_hint": {
+        "fragments": [
+          "email"
+        ]
+      },
+      "examples": {
+        "match": [
+          "contact jane.doe@example.com now",
+          "a@b.co,c@d.co",
+          "JANE@EXAMPLE.COM"
+        ],
+        "no_match": [
+          "not an email",
+          "user@localhost",
+          "@handle"
+        ]
+      },
+      "column_names": {
+        "hit": [
+          "email",
+          "Email Address",
+          "contact_e_mail"
+        ],
+        "miss": [
+          "emphasis",
+          "notes"
+        ]
+      }
+    },
+    {
+      "tag": "PHONE",
+      "patterns": [
+        "(?:^|[^\\w+])((?:\\+44|0044|0)[\\d\\s\\-()]{9,16}\\d)(?:$|\\D)"
+      ],
+      "validator": "uk_phone",
+      "name_hint": {
+        "fragments": [
+          "phone",
+          "mobile",
+          "msisdn"
+        ],
+        "tokens": [
+          "tel",
+          "cell"
+        ]
+      },
+      "examples": {
+        "match": [
+          "+44 7911 123456",
+          "call 07911 123456 asap",
+          "+44 (0)7911 123456",
+          "tel: 020 7946 0958"
+        ],
+        "no_match": [
+          "01234",
+          "12345",
+          "order 12345678901 shipped"
+        ]
+      },
+      "column_names": {
+        "hit": [
+          "phone",
+          "mobile_no",
+          "Telephone",
+          "tel"
+        ],
+        "miss": [
+          "notes",
+          "hotel"
+        ]
+      }
+    },
+    {
+      "tag": "NI_NUMBER",
+      "patterns": [
+        "(?i)(?:^|[^A-Za-z0-9])([a-z]{2}\\s?\\d{2}\\s?\\d{2}\\s?\\d{2}\\s?[a-d])(?:$|[^A-Za-z0-9])"
+      ],
+      "validator": "ni_number",
+      "name_hint": {
+        "fragments": [
+          "nationalinsurance",
+          "ninumber",
+          "nino",
+          "nationalins"
+        ]
+      },
+      "examples": {
+        "match": [
+          "AB 12 34 56 C",
+          "ref ab123456c here"
+        ],
+        "no_match": [
+          "BG123456C",
+          "DQ123456A",
+          "AB1234567C"
+        ]
+      },
+      "column_names": {
+        "hit": [
+          "ni_number",
+          "NINO",
+          "national_insurance_no"
+        ],
+        "miss": [
+          "notes"
+        ]
+      }
+    },
+    {
+      "tag": "POSTCODE",
+      "patterns": [
+        "(?i)(?:^|[^A-Za-z0-9])(GIR ?0AA|[a-z]{1,2}\\d[a-z\\d]? ?\\d[a-z]{2})(?:$|[^A-Za-z0-9])"
+      ],
+      "validator": null,
+      "name_hint": {
+        "fragments": [
+          "postcode",
+          "postalcode",
+          "zipcode"
+        ],
+        "tokens": [
+          "zip"
+        ]
+      },
+      "examples": {
+        "match": [
+          "SW1A 1AA",
+          "lives at m1 1ae.",
+          "EC1A1BB"
+        ],
+        "no_match": [
+          "hello",
+          "SW1A 1AAA"
+        ]
+      },
+      "column_names": {
+        "hit": [
+          "postcode",
+          "Postal Code",
+          "zip"
+        ],
+        "miss": [
+          "notes"
+        ]
+      }
+    },
+    {
+      "tag": "DOB",
+      "patterns": [],
+      "validator": null,
+      "name_hint": {
+        "fragments": [
+          "dateofbirth",
+          "birthdate",
+          "birthday"
+        ],
+        "tokens": [
+          "dob",
+          "birth"
+        ]
+      },
+      "examples": {
+        "match": [],
+        "no_match": []
+      },
+      "column_names": {
+        "hit": [
+          "dob",
+          "date_of_birth",
+          "DateOfBirth",
+          "birth_date"
+        ],
+        "miss": [
+          "notes",
+          "created_at"
+        ]
+      }
+    },
+    {
+      "tag": "CARD_NUMBER",
+      "patterns": [
+        "(?:^|\\D)((?:\\d[ -]?){12,18}\\d)(?:$|\\D)"
+      ],
+      "validator": "luhn",
+      "name_hint": {
+        "fragments": [
+          "cardnumber",
+          "cardno",
+          "creditcard",
+          "debitcard",
+          "ccnum"
+        ],
+        "tokens": [
+          "pan"
+        ]
+      },
+      "examples": {
+        "match": [
+          "4111 1111 1111 1111",
+          "4111-1111-1111-1111",
+          "x5555555555554444x",
+          "4111 1111 1111 1112 4111 1111 1111 1111"
+        ],
+        "no_match": [
+          "4111 1111 1111 1112",
+          "4111111111111112",
+          "0000 0000 0000 0000"
+        ]
+      },
+      "column_names": {
+        "hit": [
+          "card_number",
+          "credit_card",
+          "pan"
+        ],
+        "miss": [
+          "notes",
+          "company"
+        ]
+      }
+    },
+    {
+      "tag": "IBAN",
+      "patterns": [
+        "(?i)(?:^|[^A-Za-z0-9])([a-z]{2}\\d{2}(?:(?: [a-z0-9]{4}){2,7}(?: [a-z0-9]{1,3})?|[a-z0-9]{11,30}))(?:$|[^A-Za-z0-9])"
+      ],
+      "validator": "iban",
+      "name_hint": {
+        "fragments": [
+          "iban"
+        ]
+      },
+      "examples": {
+        "match": [
+          "GB82 WEST 1234 5698 7654 32",
+          "GB82WEST12345698765432",
+          "DE89 3704 0044 0532 0130 00"
+        ],
+        "no_match": [
+          "GB83 WEST 1234 5698 7654 32"
+        ]
+      },
+      "column_names": {
+        "hit": [
+          "iban",
+          "customer_IBAN"
+        ],
+        "miss": [
+          "notes"
+        ]
+      }
+    },
+    {
+      "tag": "SORT_CODE",
+      "patterns": [
+        "(?:^|[^\\d-])(\\d{2}-\\d{2}-\\d{2}|\\d{2} \\d{2} \\d{2})(?:$|[^\\d-])"
+      ],
+      "validator": "sort_code",
+      "name_hint": {
+        "fragments": [
+          "sortcode"
+        ]
+      },
+      "examples": {
+        "match": [
+          "12-34-56",
+          "sort 12 34 56."
+        ],
+        "no_match": [
+          "00-00-00",
+          "123-45-678"
+        ]
+      },
+      "column_names": {
+        "hit": [
+          "sort_code",
+          "SortCode"
+        ],
+        "miss": [
+          "notes"
+        ]
+      }
+    },
+    {
+      "tag": "IP_ADDRESS",
+      "patterns": [
+        "(?:^|[^\\d.])((?:\\d{1,3}\\.){3}\\d{1,3})(?:$|[^\\d.])",
+        "(?i)(?:^|[^\\w:])((?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4})(?:$|[^\\w:])"
+      ],
+      "validator": "ip_address",
+      "name_hint": {
+        "fragments": [
+          "ipaddress",
+          "ipaddr",
+          "ipv4",
+          "ipv6"
+        ],
+        "tokens": [
+          "ip"
+        ]
+      },
+      "examples": {
+        "match": [
+          "192.168.1.10",
+          "ip:10.0.0.1",
+          "1.2.3.4,5.6.7.8",
+          "2001:db8::1",
+          "addr=::1"
+        ],
+        "no_match": [
+          "999.1.1.1",
+          "12:30:45",
+          "1.2.3",
+          "version 1.2.3.4.5"
+        ]
+      },
+      "column_names": {
+        "hit": [
+          "ip",
+          "ip_address",
+          "client_IPv4"
+        ],
+        "miss": [
+          "notes",
+          "zip_code_x",
+          "ship"
+        ]
+      }
+    }
+  ]
+}

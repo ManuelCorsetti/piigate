@@ -1,12 +1,14 @@
-"""Detector definitions and the built-in UK GDPR set."""
+"""Detector type, column-name helpers, and the custom-detector hook.
+
+The built-in detectors are declarative: see ``rules/uk_gdpr.json`` and :mod:`piigate.ruleset`.
+"""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
-
-from . import validators
+from functools import cache
 
 Validator = Callable[[str], bool]
 NameHint = Callable[[str], bool]
@@ -14,13 +16,36 @@ NameHint = Callable[[str], bool]
 
 @dataclass(frozen=True)
 class Detector:
-    """``pattern`` finds candidates in values; ``validator`` (optional) confirms each match;
-    ``name_hint`` flags a column by its normalised name alone (see :func:`normalise_name`)."""
+    """``patterns`` find candidates in values (``group`` is the capture group holding the
+    matched text); ``validator`` (optional) confirms each; ``name_hint`` flags a column by its
+    normalised name alone (see :func:`normalise_name`)."""
 
     tag: str
-    pattern: re.Pattern[str] | None = None
+    patterns: tuple[re.Pattern[str], ...] = ()
     validator: Validator | None = None
     name_hint: NameHint | None = None
+    group: int = 0
+
+    def matches(self, text: str) -> Iterator[str]:
+        """Yield validated matched substrings of ``text``.
+
+        Ruleset patterns put their boundaries *outside* the capture group (no lookarounds, for
+        RE2 portability), so after a match we resume at the end of the group, not the match. After
+        a rejected candidate we resume one character into it, so a valid match overlapping a
+        failed one is still found.
+        """
+        for pat in self.patterns:
+            pos = 0
+            while pos <= len(text):
+                m = pat.search(text, pos)
+                if m is None:
+                    break
+                start, end = m.span(self.group)
+                if self.validator is None or self.validator(m.group(self.group)):
+                    yield m.group(self.group)
+                    pos = end if end > pos else pos + 1
+                else:
+                    pos = start + 1
 
 
 def normalise_name(name: object) -> str:
@@ -40,86 +65,6 @@ def name_contains(*fragments: str, tokens: Iterable[str] = ()) -> NameHint:
     return hint
 
 
-_NAME_QUALIFIERS = frozenset(
-    "first last middle full given family maiden customer client patient employee contact "
-    "person holder legal preferred".split()
-)
-_NAME_COMPACT = frozenset("surname forename firstname lastname fullname middlename".split())
-
-
-def _name_col_hint(norm: str) -> bool:
-    toks = norm.split("_")
-    if _NAME_COMPACT & set(toks):
-        return True
-    return any(
-        t == "name" and (i == 0 or toks[i - 1] in _NAME_QUALIFIERS) for i, t in enumerate(toks)
-    )
-
-
-def _rx(pattern: str) -> re.Pattern[str]:
-    return re.compile(pattern, re.IGNORECASE)
-
-
-BUILTIN_DETECTORS: tuple[Detector, ...] = (
-    Detector("NAME", name_hint=_name_col_hint),  # regex is weak for names: column-name only
-    Detector(
-        "EMAIL",
-        _rx(r"(?<![\w.+-])[\w.+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+"),
-        name_hint=name_contains("email"),
-    ),
-    Detector(
-        "PHONE",
-        _rx(r"(?<![\w+])(?:\+44|0044|0)[\d\s\-()]{9,16}\d(?!\d)"),
-        validators.uk_phone,
-        name_contains("phone", "mobile", "msisdn", tokens=("tel", "cell")),
-    ),
-    Detector(
-        "NI_NUMBER",
-        _rx(r"(?<![a-z0-9])[a-z]{2}\s?\d{2}\s?\d{2}\s?\d{2}\s?[a-d](?![a-z0-9])"),
-        validators.ni_number,
-        name_contains("nationalinsurance", "ninumber", "nino", "nationalins"),
-    ),
-    Detector(
-        "POSTCODE",
-        _rx(r"(?<![a-z0-9])(?:GIR ?0AA|[a-z]{1,2}\d[a-z\d]? ?\d[a-z]{2})(?![a-z0-9])"),
-        name_hint=name_contains("postcode", "postalcode", "zipcode", tokens=("zip",)),
-    ),
-    Detector(
-        "DOB",  # a bare date isn't DOB, so column-name only
-        name_hint=name_contains("dateofbirth", "birthdate", "birthday", tokens=("dob", "birth")),
-    ),
-    Detector(
-        "CARD_NUMBER",
-        _rx(r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)"),
-        validators.luhn,
-        name_contains("cardnumber", "cardno", "creditcard", "debitcard", "ccnum", tokens=("pan",)),
-    ),
-    Detector(
-        "IBAN",
-        _rx(
-            r"(?<![a-z0-9])[a-z]{2}\d{2}"
-            r"(?:(?: [a-z0-9]{4}){2,7}(?: [a-z0-9]{1,3})?|[a-z0-9]{11,30})(?![a-z0-9])"
-        ),
-        validators.iban,
-        name_contains("iban"),
-    ),
-    Detector(
-        "SORT_CODE",
-        _rx(r"(?<![\d-])\d{2}([- ])\d{2}\1\d{2}(?![\d-])"),
-        validators.sort_code,
-        name_contains("sortcode"),
-    ),
-    Detector(
-        "IP_ADDRESS",
-        _rx(
-            r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])"
-            r"|(?<![\w:])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\w:])"
-        ),
-        validators.ip_address,
-        name_contains("ipaddress", "ipaddr", "ipv4", "ipv6", tokens=("ip",)),
-    ),
-)
-
 _custom: list[Detector] = []
 
 
@@ -131,15 +76,24 @@ def register_detector(
 ) -> Detector:
     """Register a custom detector for all later scans in this process.
 
-    ``column_names``: fragments that flag a column by name. Returns the detector, which can also
-    be passed explicitly via ``scan_dataframe(detectors=...)`` to avoid the process-wide registry.
+    ``pattern`` is a plain Python regex (not checked for RE2 portability; use a ruleset file for
+    that, see :func:`piigate.load_ruleset`). ``column_names``: fragments that flag a column by
+    name. Returns the detector, which can also be passed explicitly via
+    ``scan_dataframe(detectors=...)`` to avoid the process-wide registry.
     """
     compiled = re.compile(pattern) if isinstance(pattern, str) else pattern
     frags = tuple(normalise_name(c).replace("_", "") for c in column_names)
-    det = Detector(tag, compiled, validator, name_contains(*frags) if frags else None)
+    det = Detector(tag, (compiled,), validator, name_contains(*frags) if frags else None)
     _custom.append(det)
     return det
 
 
+@cache
+def builtin_detectors() -> tuple[Detector, ...]:
+    from .ruleset import load_ruleset
+
+    return load_ruleset("uk_gdpr")
+
+
 def default_detectors() -> tuple[Detector, ...]:
-    return BUILTIN_DETECTORS + tuple(_custom)
+    return builtin_detectors() + tuple(_custom)

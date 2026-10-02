@@ -62,6 +62,7 @@ The scanner must never put raw PII into results, logs, or exceptions.
 ## Conventions
 - Type hints throughout; `ruff` + `pytest`.
 - Pure functions for detectors (easy to test); no global state.
+- Rules are declarative JSON with RE2-compatible patterns (no lookaround/backrefs) so other backends (BQ, Rust, Go) can share them; see `docs/ruleset.md`.
 - Small public API: `scan_dataframe`, `ScanResult`, `ColumnFinding`, `register_detector`.
 
 ## Open questions
