@@ -82,7 +82,7 @@ def test_custom_detector_explicit_and_registered():
 
     from piigate import Detector
 
-    d = Detector("EMP_ID", re.compile(r"EMP\d{6}"))
+    d = Detector("EMP_ID", (re.compile(r"EMP\d{6}"),))
     df = pd.DataFrame({"n": ["EMP123456"]})
     assert scan_dataframe(df, ["n"], detectors=[d]).failed_columns["n"].tags == ("EMP_ID",)
     try:
