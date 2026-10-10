@@ -67,3 +67,13 @@ def ip_address(text: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+VALIDATORS = {
+    "luhn": luhn,
+    "ni_number": ni_number,
+    "iban": iban,
+    "sort_code": sort_code,
+    "uk_phone": uk_phone,
+    "ip_address": ip_address,
+}
