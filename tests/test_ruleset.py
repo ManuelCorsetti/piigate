@@ -8,7 +8,7 @@ from piigate import load_ruleset, scan_dataframe
 from piigate.detectors import default_detectors, normalise_name
 from piigate.ruleset import check_re2
 
-DOC = json.loads(resources.files("piigate").joinpath("rules", "uk_gdpr.json").read_text("utf-8"))
+DOC = json.loads((resources.files("piigate") / "rules" / "uk_gdpr.json").read_text("utf-8"))
 SPECS = {d["tag"]: d for d in DOC["detectors"]}
 DETS = {d.tag: d for d in load_ruleset("uk_gdpr")}
 

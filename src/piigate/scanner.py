@@ -116,8 +116,8 @@ def _scan_column(
             counts[det.tag] = max(counts.get(det.tag, 0), n)
             rows[det.tag] = np.ones(u, dtype=bool)
             tag_shapes: Counter[str] = Counter()
-            for v, w in zip(arr, weight, strict=True):
-                tag_shapes[mask_shape(v)] += int(w)
+            for v, cnt in zip(arr, weight, strict=True):
+                tag_shapes[mask_shape(v)] += int(cnt)
             shapes[det.tag] = tag_shapes
             continue
         if not det.patterns or u == 0:

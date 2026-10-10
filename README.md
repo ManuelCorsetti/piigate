@@ -23,4 +23,4 @@ Detectors are declarative RE2-compatible JSON (`src/piigate/rules/`, spec in `do
 `load_ruleset(path)` loads your own.
 
 Findings contain masked shapes only (`+DD DDDD DDDDDD`), never raw values.
-`NAME` and `DOB` are column-name-only tags (regex is too weak). Dev: `pip install -e .[dev]`, `ruff`, `pytest`.
+`NAME` and `DOB` are column-name-only tags (regex is too weak). Dev: `pip install -e .[dev]`; CI runs `ruff check`, `ruff format --check`, `mypy`, `pytest --cov`.

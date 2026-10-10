@@ -129,5 +129,5 @@ def load_ruleset(source: str | Path | Mapping[str, Any]) -> tuple[Detector, ...]
     if path.suffix == ".json":
         text = path.read_text(encoding="utf-8")
     else:
-        text = resources.files("piigate").joinpath("rules", f"{source}.json").read_text("utf-8")
+        text = (resources.files("piigate") / "rules" / f"{source}.json").read_text("utf-8")
     return detectors_from_dict(json.loads(text))
